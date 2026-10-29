@@ -176,6 +176,24 @@ impl Game<'_> {
         }));
     }
 
+    /// ClientPacketListener.sendUnattendedCommand: a command the player
+    /// didn't type (a clicked chat line, a dialog's button, a mod's
+    /// command) goes unsigned. Vanilla asks the player before signing one
+    /// (multiplayer.confirm_command.signature_required); with no such
+    /// screen here, neither a server nor a mod can have the player sign a
+    /// message they never saw. A server that enforces secure chat refuses
+    /// one with a message argument, as it did before chat was signed.
+    pub(super) fn send_unattended_command(&mut self, command: &str) {
+        let command = command.trim();
+        let command = command.strip_prefix('/').unwrap_or(command);
+        if command.is_empty() || !self.chat_abilities().allows(&format!("/{command}")) {
+            return;
+        }
+        self.send(S::ChatCommand(play::ChatCommand {
+            command: command.to_owned(),
+        }));
+    }
+
     /// handlePlayerChat's bookkeeping: the body's packed last seen against
     /// the signature cache, which then takes the message (push), and
     /// markMessageAsProcessed for a signed one, acknowledged once more than
