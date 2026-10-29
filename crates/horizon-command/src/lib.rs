@@ -419,6 +419,28 @@ impl ParseResults {
             CommandError::tr_at("command.unknown.argument", &[], &reader)
         })
     }
+    /// SignableCommand.of: the message arguments a signed command signs, by
+    /// name, with their text, not past a redirect to the root (`execute ...
+    /// run`). `dispatcher` is the one that made this parse.
+    pub fn signable_arguments(&self, dispatcher: &Dispatcher) -> Vec<(String, String)> {
+        let root = self.context.root;
+        let mut out = Vec::new();
+        let mut context = Some(&self.context);
+        while let Some(c) = context {
+            for &(node, (start, end)) in &c.nodes {
+                if let NodeKind::Argument {
+                    ty: ArgType::Message,
+                    name,
+                } = &dispatcher.nodes[node].kind
+                    && let Some(text) = self.input.get(start..end)
+                {
+                    out.push((name.clone(), text.to_owned()));
+                }
+            }
+            context = c.child.as_deref().filter(|child| child.root != root);
+        }
+        out
+    }
     /// The executable context and command id, or the vanilla error.
     pub fn executable(&self) -> CmdResult<(&Context, &'static str)> {
         if let Some(e) = self.error() {
