@@ -563,7 +563,7 @@ impl Game<'_> {
             // The server checks the player's permissions; its feedback shows.
             Some(false) => {
                 for line in lines {
-                    self.send_chat(&format!("/{line}"));
+                    self.send_unattended_command(&line);
                 }
             }
             None => self.mods.quiet.push((mod_id, lines)),
@@ -683,7 +683,7 @@ impl Game<'_> {
                         // Dropped.
                     } else if self.remote.is_some() {
                         // The server checks the player's permissions.
-                        self.send_chat(&format!("/{line}"));
+                        self.send_unattended_command(&line);
                     } else {
                         self.mods.commands.push(line);
                     }

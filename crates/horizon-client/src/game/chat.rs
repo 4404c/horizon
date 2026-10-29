@@ -899,7 +899,7 @@ impl Game<'_> {
             return;
         }
         if self.remote.is_some() {
-            self.send_chat(&format!("/{command}"));
+            self.send_unattended_command(command);
         } else if !self.local_server_mod_command(command) {
             self.run_command(command);
         }

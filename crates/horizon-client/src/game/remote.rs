@@ -178,6 +178,8 @@ pub(super) struct Remote {
     pub chat_received: u64,
     /// The server's command tree (ClientboundCommandsPacket).
     pub commands: Option<horizon_client::command::Dispatcher>,
+    /// The chat session, the last-seen window and the signature cache.
+    pub(super) secure_chat: super::remote_chat::SecureChat,
     players: HashMap<u128, String>,
     /// `ClientPacketListener.playerInfoMap` as player-list entries, and
     /// which of them are listed.
@@ -496,6 +498,7 @@ impl Game<'_> {
             chat: Vec::new(),
             chat_received: 0,
             commands: None,
+            secure_chat: Default::default(),
             players: HashMap::new(),
             tab_players: HashMap::new(),
             skin_textures: HashMap::new(),
@@ -1837,6 +1840,7 @@ impl Game<'_> {
                     r.sent_info = info.clone();
                 }
                 self.send(S::ClientInformation(info));
+                self.remote_chat_login();
             }
             C::Respawn(p) => {
                 // A new player, without effects (the server sends them
@@ -2889,6 +2893,7 @@ impl Game<'_> {
             }
             C::PlayerChat(p) => {
                 use horizon_client::scoreboard::tag_to_json;
+                self.remote_chat_seen(&p);
                 let content = p
                     .unsigned_content
                     .as_ref()
@@ -3717,6 +3722,7 @@ impl Game<'_> {
         // Client mods tick on any server, single player's own included.
         self.tick_mods();
         self.native_tick();
+        self.tick_chat_session();
         // Minecraft.tick sends this even when the player cannot tick yet,
         // including while waiting for chunks. Keep it outside early returns.
         if self.remote.as_ref().is_some_and(|r| r.joined) {
@@ -5709,33 +5715,18 @@ impl Game<'_> {
             _ => Ok(false),
         }
     }
-    /// ClientPacketListener.sendChat / sendCommand (unsigned). The Chat
-    /// option's Hidden and System levels keep chat out and Hidden keeps the
-    /// commands out (ChatAbilities).
+    /// ClientPacketListener.sendChat / sendCommand, signed with a chat
+    /// session (game/remote_chat.rs). The Chat option's Hidden and System
+    /// levels keep chat out and Hidden keeps the commands out (ChatAbilities).
     pub(super) fn send_chat(&mut self, message: &str) {
         let message = message.trim();
         if message.is_empty() || !self.chat_abilities().allows(message) {
             return;
         }
         if let Some(command) = message.strip_prefix('/') {
-            self.send(S::ChatCommand(play::ChatCommand {
-                command: command.to_owned(),
-            }));
+            self.send_command(command);
         } else {
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| d.as_millis() as i64);
-            self.send(S::Chat(play::Chat {
-                message: message.chars().take(256).collect(),
-                timestamp,
-                salt: 0,
-                signature: None,
-                last_seen: play::LastSeenUpdate {
-                    offset: 0,
-                    acknowledged: [0; 3],
-                    checksum: 0,
-                },
-            }));
+            self.send_signed_chat(message);
         }
     }
     /// MultiPlayerGameMode.dropItem (key.drop): predict the removal, then send
