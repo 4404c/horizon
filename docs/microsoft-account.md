@@ -189,16 +189,28 @@ player renderer. Until a skin arrives the default skin for the UUID shows (as to
 26.3's dedicated servers default to `enforce-secure-profile=true`. A client without a chat session
 can join and play, but every chat message and signed command argument is refused with "Chat
 disabled due to missing profile public key. Please try reconnecting." (`SignedMessageChain.Decoder.unsigned`).
-To chat on such servers the game will:
+To chat on such servers the game (`auth.rs`, `game/remote_chat.rs`, `horizon_protocol::secure_chat`):
 
-- fetch the profile key pair from the services `player/getCertificates` endpoint (Minecraft token);
-- send `ServerboundChatSessionUpdatePacket` (random session UUID, key expiry, public key, Mojang's
-  key signature) after joining;
-- sign each chat message and signable command argument with SHA256withRSA over vanilla's
-  `SignedMessageBody` layout and keep the last-seen message tracker and acknowledgements.
+- fetches the profile key pair from the services `player/getCertificates` endpoint with the Minecraft
+  token, on a background thread at start and on each join (AccountProfileKeyPairManager): the PKCS#8
+  private key, the X.509 public key, `publicKeySignatureV2`, `expiresAt` and `refreshedAfter`. Like the
+  token, the pair stays in memory (vanilla's `profilekeys/` file is not written). Past `refreshedAfter` a
+  new pair is fetched (checked at most hourly while playing, and on every join); a failed fetch keeps the
+  old pair and tries again an hour later;
+- sends `ServerboundChatSessionUpdatePacket` (random session UUID, key expiry, public key, Mojang's
+  key signature) after each login packet, and again when the pair is renewed, only when the server
+  plays the account under its own profile id (`isLocalPlayer`): an offline-mode server's offline id
+  gets no session, so chat stays unsigned there as before;
+- signs each chat message and each message argument of a command (`SignableCommand.of` over the
+  server's command tree, e.g. `/msg`'s `message`) with SHA256withRSA over vanilla's
+  `PlayerChatMessage.updateSignature` layout, one chain link each, and keeps the last-seen tracker
+  (`LastSeenMessagesTracker`: the 20-message window, offsets, checksums, a `ServerboundChatAckPacket`
+  past 64) and the 128-entry signature cache that unpacks other players' last-seen lists.
 
-Until part d lands, Horizon joins online servers but chat works only where
-`enforce-secure-profile=false` (or the server can't validate keys).
+`tools/secure_chat_client_e2e.py` checks it against vanilla 26.3's server with a mock of the services
+that issues certificates: online mode with `enforce-secure-profile=true` (signed chat logged as secure,
+a `/msg` whisper delivered, nothing refused) and offline mode (unsigned chat, as before). Other players'
+signatures are not verified yet (no Not Secure marking: `ChatListener.evaluateTrustLevel`).
 
 ## Harnesses
 

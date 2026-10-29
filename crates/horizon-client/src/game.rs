@@ -152,6 +152,7 @@ mod pumpkin;
 mod raids;
 mod recipe_book;
 mod remote;
+mod remote_chat;
 mod remote_chunks;
 mod remote_mob_data;
 mod remote_mob_particles;
@@ -498,6 +499,8 @@ impl Options {
                 Ok(session) => {
                     o.player_name = Some(session.name.clone());
                     horizon_client::auth::set_current(session);
+                    // The chat key pair, ready before the first join.
+                    horizon_client::auth::prepare_chat_keys(true);
                 }
                 Err(e) => eprintln!("Horizon: not signed in: {e}"),
             }

@@ -4,7 +4,7 @@
 //! (SayCommand, EmoteCommands, MsgCommand), relayed by the hub as chat.
 use super::{Game, lan::LanHost};
 use horizon_client::{
-    command::{Arg, ArgType, NodeKind, ParseResults, vanilla},
+    command::{Arg, ParseResults, vanilla},
     lan::{
         data::component_nbt,
         hub::{HostEvent, chat::ChatMessage},
@@ -33,25 +33,8 @@ impl Game<'_> {
         permission: u8,
         command: &str,
     ) -> Vec<(String, String)> {
-        let parse = self.parse_as(permission, command);
-        let nodes = &vanilla::game_dispatcher().nodes;
-        let root = parse.context.root;
-        let mut out = Vec::new();
-        let mut context = Some(&parse.context);
-        while let Some(c) = context {
-            for &(node, (start, end)) in &c.nodes {
-                if let NodeKind::Argument {
-                    ty: ArgType::Message,
-                    name,
-                } = &nodes[node].kind
-                    && let Some(text) = command.get(start..end)
-                {
-                    out.push((name.clone(), text.to_owned()));
-                }
-            }
-            context = c.child.as_deref().filter(|child| child.root != root);
-        }
-        out
+        self.parse_as(permission, command)
+            .signable_arguments(vanilla::game_dispatcher())
     }
 
     /// handleChatCommand (performUnsignedChatCommand): refused when the
