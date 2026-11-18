@@ -155,6 +155,9 @@ impl Game<'_> {
                 game.native_player_clone(cloned, &name, true, original);
             });
         }
+        // sendLevelInfo reads the level's respawn data when it sends, after the
+        // Clone hook, which may have moved it.
+        let world_spawn = self.world_spawn_position();
         let clock_rate = self.network_clock_rate();
         let ctx = TickCtx {
             world: &mut self.world,
@@ -162,7 +165,7 @@ impl Game<'_> {
             next_entity: &mut self.next_entity,
             // PlayerList.respawn / sendLevelInfo send level respawn data,
             // independently of the personal destination passed to Hub::respawn.
-            spawn: world,
+            spawn: world_spawn,
             spawn_angle: self.level.world_spawn_angle,
             spawn_dimension: self.level.spawn_dimension(),
             sea_level: self.end.locator().map_or(63, |terrain| terrain.sea_level()),
