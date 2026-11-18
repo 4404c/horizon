@@ -164,6 +164,7 @@ impl Game<'_> {
             // independently of the personal destination passed to Hub::respawn.
             spawn: world,
             spawn_angle: self.level.world_spawn_angle,
+            spawn_dimension: self.level.spawn_dimension(),
             sea_level: self.end.locator().map_or(63, |terrain| terrain.sea_level()),
             difficulty: i32::from(self.ui.difficulty),
             difficulty_locked: self.level.difficulty_locked,
