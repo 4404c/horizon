@@ -1768,9 +1768,13 @@ impl HurtWorld for Environment<'_> {
         else {
             // `BlocksAttacks.hurtBlockingItem` runs once the raised item is reached,
             // even when its reductions stop nothing (a hit from behind): the hit
-            // counts it as used, and `itemDamage` of 0 wears nothing. A block a
-            // native mod takes back stays as before, unused.
+            // counts it as used, and wears what `itemDamage` gives for 0 (nothing,
+            // unless an item's own threshold is 0 or below). A block a native mod
+            // takes back stays as before, unused.
             self.blocking_item_used = reached && !vanilla_blocked;
+            if self.blocking_item_used {
+                self.shield_damage = shield_damage;
+            }
             return Ok(0.0);
         };
         self.blocking_item_used = true;
@@ -2243,7 +2247,7 @@ mod tests {
         let resources = crate::motion::MotionResources::load(&root, &assets).unwrap();
         let health = &resources.health;
         let id = health.damage.id("minecraft:arrow").unwrap();
-        let hit = |angle: f64, pierce: bool| {
+        let hit = |angle: f64, pierce: bool, threshold: f32| {
             let shield = super::Blocking {
                 rules: BlockingRules {
                     delay_seconds: 0.25,
@@ -2255,7 +2259,7 @@ mod tests {
                         factor: 1.0,
                     }],
                     item_damage: ItemDamageFunction {
-                        threshold: 3.0,
+                        threshold,
                         base: 1.0,
                         factor: 1.0,
                     },
@@ -2281,14 +2285,17 @@ mod tests {
                 )
                 .unwrap()
         };
-        let behind = hit(std::f64::consts::PI, false);
+        let behind = hit(std::f64::consts::PI, false, 3.0);
         assert!(
             behind.blocking_item_used,
             "a hit from behind uses the shield"
         );
         assert_eq!(behind.blocked, 0.0, "and the shield stops none of it");
         assert_eq!(behind.shield_damage, 0, "nor wears");
-        let piercing = hit(0.0, true);
+        // ItemDamageFunction.apply(0) is `base` once the threshold is 0.
+        let worn = hit(std::f64::consts::PI, false, 0.0);
+        assert_eq!(worn.shield_damage, 1, "an item whose threshold is 0 wears");
+        let piercing = hit(0.0, true, 3.0);
         assert!(!piercing.blocking_item_used, "a piercing arrow skips it");
         assert_eq!(piercing.blocked, 0.0);
     }
